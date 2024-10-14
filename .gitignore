@@ -1,0 +1,42 @@
+# Ignore the target directory, where Cargo builds your project
+/target/
+
+# Ignore any generated .rs.bk files (e.g., for IDEs or backups)
+*.rs.bk
+
+# Ignore build artifacts
+**/*.rs.bk
+*.d
+*.exe
+*.so
+*.dylib
+*.dll
+
+# Ignore Cargo.lock for libraries (you can remove this line if it's a binary project)
+/Cargo.lock
+
+# Ignore output binaries
+*.exe
+*.out
+*.o
+*.so
+*.dylib
+*.dll
+
+# Ignore temporary files created by editors or IDEs
+*.swp
+*.swo
+*.tmp
+*~
+
+# Ignore editor-specific directories
+.idea/
+.vscode/
+
+# Ignore MacOS specific files
+.DS_Store
+
+# Ignore coverage files and directories
+/coverage/
+/target/debug/
+/target/release//target
