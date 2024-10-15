@@ -1,13 +1,38 @@
 use crate::parsing::ForwardByteParser;
 
-pub enum Frame<'b>{
+pub enum Frame{
     ZstandardFrame,
-    SkippableFrame(SkippableFrame<'b>)
+    SkippableFrame(SkippableFrame)
 }
 
-pub struct SkippableFrame<'c> {
+#[derive(Debug)]
+pub struct SkippableFrame {
     pub magic: u32,
-    pub data: &'c[u8]
+    pub data: Vec<u8>
+}
+
+impl SkippableFrame {
+    pub fn decode(self) -> Vec<u8> {
+        self.data
+    }
+}
+
+pub struct FrameIterator<'a> {
+    parser: ForwardByteParser<'a>
+}
+
+impl<'a> FrameIterator<'a> {
+    pub fn new(data: &'a [u8]) -> Self {
+        Self { parser: ForwardByteParser::new(data) }
+    }
+}
+
+impl <'a> Iterator for FrameIterator<'a>  {
+    type Item = Frame;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        Frame::parse(&mut self.parser).ok()
+    }
 }
 
 #[derive(Debug)]
@@ -19,8 +44,8 @@ pub enum ParseError {
 const DATA_FRAME_MAGIC_NUMBER: u32 = 0xFD2FB528;
 const SKIPPABLE_FRAME_MASK: u32 = 0x184d2a50; // can be 0x184d2a5? (any last number)
 
-impl <'b>Frame<'b> {
-    pub fn parse(input: &'b mut ForwardByteParser) -> Result<Self, ParseError> {
+impl Frame {
+    pub fn parse(input: &mut ForwardByteParser) -> Result<Frame, ParseError> {
         let magic_number = input.le_u32().map_err(|_| ParseError::InvalidFrame)?;
 
         if magic_number == DATA_FRAME_MAGIC_NUMBER {
@@ -33,7 +58,7 @@ impl <'b>Frame<'b> {
 
             return Ok(Frame::SkippableFrame(SkippableFrame {
                 magic: magic_number,
-                data,
+                data: data.to_owned(), // makes a copy :(
             }))
         }
 
