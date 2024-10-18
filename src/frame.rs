@@ -20,15 +20,38 @@ impl SkippableFrame {
 
 #[derive(Debug)]
 pub struct ZstandardFrame {
-    frame_header: FrameHeader,
+    header: FrameHeader,
     blocks: Vec<Block>,
     checksum: Option<u32>,
 }
 
 impl ZstandardFrame {
-    pub fn parse(input: &mut ForwardByteParser) {
+    pub fn parse(input: &mut ForwardByteParser) -> ZstandardFrame {
         let header = FrameHeader::parse(input);
 
+        println!("{:?}", header);
+
+        let mut blocks: Vec<Block> = vec![];
+
+        while let (is_last, block) = Block::parse(input) {
+            blocks.push(block);
+
+            if  is_last {
+                break;
+            }
+        }
+
+        let checksum = if header.has_content_checksum {
+            input.le_u32().ok()
+        } else {
+            None
+        };
+
+        ZstandardFrame {
+            header,
+            blocks,
+            checksum
+        }
     }
 }
 
@@ -63,9 +86,11 @@ impl Frame {
     pub fn parse(input: &mut ForwardByteParser) -> Result<Frame, ParseError> {
         let magic_number = input.le_u32().map_err(|_| ParseError::InvalidFrame)?;
 
+        println!("{}", magic_number);
+
         if magic_number == DATA_FRAME_MAGIC_NUMBER {
             let frame = ZstandardFrame::parse(input);
-            // return Ok();
+            return Ok(Frame::ZstandardFrame(frame));
         }
 
         if magic_number & SKIPPABLE_FRAME_MASK == SKIPPABLE_FRAME_MASK {
@@ -89,6 +114,11 @@ pub struct FrameHeader {
     pub is_single_segment: bool,
     pub fcs_field_size: u8, // frame content field size
     pub did_field_size: u8, // dictionary field size
+    // TODO: make fc_size optional
+    // TODO: add Window_Descriptor
+    // TODO: add Dictionary_ID
+
+    pub fc_size: u64,
 }
 
 const FCS_SIZES: [u8; 4] = [0, 2, 4, 8];
@@ -97,7 +127,6 @@ const DID_SIZES: [u8; 4] = [0, 1, 2, 4];
 impl FrameHeader {
     pub fn parse(input: &mut ForwardByteParser) -> FrameHeader {
         let descriptor = input.u8().expect("Could not read FrameHeader byte");
-
 
         let is_single_segment = (descriptor >> 5) & 1 == 1;
 
@@ -114,11 +143,18 @@ impl FrameHeader {
 
         let did_field_size = DID_SIZES.get((descriptor & 3) as usize).copied().unwrap_or_else(|| panic!("Unexpected Dictionary_ID_Flag value"));
 
+        let fc_size_bytes = input.slice(fcs_field_size as usize).unwrap();
+
+        let mut buf = [0u8; 8];
+        buf[..fc_size_bytes.len()].copy_from_slice(fc_size_bytes);
+        let fc_size = u64::from_le_bytes(buf);
+
         FrameHeader {
             is_single_segment,
             has_content_checksum,
             fcs_field_size,
             did_field_size,
+            fc_size
         }
     }
 }

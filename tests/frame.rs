@@ -38,4 +38,22 @@ fn parse_frame_header() {
     assert_eq!(frame_header.has_content_checksum, true);
     assert_eq!(frame_header.fcs_field_size, 4);
     assert_eq!(frame_header.did_field_size, 4);
+
+    let mock_data = [
+        0x24 // 10000111
+             // (7-6 bits) 10 - Frame_Content_Size_Flag "2" -> FCS_Field_Size = "4"
+             // (5th fit)   0 - Single_Segment_Flag
+             // (4-3)       0 - unused/reserved
+             // (2nd bit)   1 - content checksum will be present at the frame's end.
+             // (1-0 bits) 11 - Dictionary_ID_Flag = 3 -> DID_Field_Size = 4
+    ];
+
+    let mut parser = ForwardByteParser::new(&mock_data);
+
+    let frame_header = FrameHeader::parse(&mut parser);
+
+    assert_eq!(frame_header.is_single_segment, true);
+    assert_eq!(frame_header.has_content_checksum, true);
+    assert_eq!(frame_header.fcs_field_size, 1);
+    assert_eq!(frame_header.did_field_size, 0);
 }

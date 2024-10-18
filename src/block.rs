@@ -30,7 +30,7 @@ impl Block {
                 Block::RLE { repeat: block_size, byte }
             },
             // 1 => Block::Raw { size: block_size },
-            _ => panic!("Unknown block_type."),
+            _ => panic!("Unknown block_type {:?}", block_type),
         };
 
         (is_last, block)

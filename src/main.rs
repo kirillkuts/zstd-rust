@@ -28,7 +28,7 @@ fn main() {
     for frame in frame_iterator {
         match frame {
             Frame::ZstandardFrame(some) => {
-                println!("Unexpected zstandardFrame!");
+                println!("{:#x?}", some);
             },
             Frame::SkippableFrame(skippableFrame) => {
                 println!("{:#x?}", skippableFrame);
