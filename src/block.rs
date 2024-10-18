@@ -1,6 +1,7 @@
 
 use crate::parsing::ForwardByteParser;
 
+#[derive(Debug)]
 pub enum Block {
     Raw { size: usize, data: Vec<u8> },
     RLE { byte: u8, repeat: usize },

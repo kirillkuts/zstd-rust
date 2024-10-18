@@ -1,7 +1,8 @@
+use crate::block::Block;
 use crate::parsing::ForwardByteParser;
 
 pub enum Frame{
-    ZstandardFrame,
+    ZstandardFrame(ZstandardFrame),
     SkippableFrame(SkippableFrame)
 }
 
@@ -14,6 +15,20 @@ pub struct SkippableFrame {
 impl SkippableFrame {
     pub fn decode(self) -> Vec<u8> {
         self.data
+    }
+}
+
+#[derive(Debug)]
+pub struct ZstandardFrame {
+    frame_header: FrameHeader,
+    blocks: Vec<Block>,
+    checksum: Option<u32>,
+}
+
+impl ZstandardFrame {
+    pub fn parse(input: &mut ForwardByteParser) {
+        let header = FrameHeader::parse(input);
+
     }
 }
 
@@ -49,7 +64,8 @@ impl Frame {
         let magic_number = input.le_u32().map_err(|_| ParseError::InvalidFrame)?;
 
         if magic_number == DATA_FRAME_MAGIC_NUMBER {
-            return Ok(Frame::ZstandardFrame);
+            let frame = ZstandardFrame::parse(input);
+            // return Ok();
         }
 
         if magic_number & SKIPPABLE_FRAME_MASK == SKIPPABLE_FRAME_MASK {
@@ -63,5 +79,46 @@ impl Frame {
         }
 
         Err(ParseError::InvalidFrame)
+    }
+}
+
+
+#[derive(Debug)]
+pub struct FrameHeader {
+    pub has_content_checksum: bool,
+    pub is_single_segment: bool,
+    pub fcs_field_size: u8, // frame content field size
+    pub did_field_size: u8, // dictionary field size
+}
+
+const FCS_SIZES: [u8; 4] = [0, 2, 4, 8];
+const DID_SIZES: [u8; 4] = [0, 1, 2, 4];
+
+impl FrameHeader {
+    pub fn parse(input: &mut ForwardByteParser) -> FrameHeader {
+        let descriptor = input.u8().expect("Could not read FrameHeader byte");
+
+
+        let is_single_segment = (descriptor >> 5) & 1 == 1;
+
+        let fcs_field_size = if is_single_segment {
+            1
+        } else {
+            FCS_SIZES
+                .get((descriptor >> 6) as usize)
+                .copied()
+                .unwrap_or_else(|| panic!("Unexpected fcs_flag value."))
+        };
+
+        let has_content_checksum = descriptor & 4 == 4;
+
+        let did_field_size = DID_SIZES.get((descriptor & 3) as usize).copied().unwrap_or_else(|| panic!("Unexpected Dictionary_ID_Flag value"));
+
+        FrameHeader {
+            is_single_segment,
+            has_content_checksum,
+            fcs_field_size,
+            did_field_size,
+        }
     }
 }
