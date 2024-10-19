@@ -114,17 +114,28 @@ pub struct FrameHeader {
     pub is_single_segment: bool,
     pub fcs_field_size: u8, // frame content field size
     pub did_field_size: u8, // dictionary field size
-    // TODO: make fc_size optional
-    // TODO: add Window_Descriptor
-    // TODO: add Dictionary_ID
 
-    pub fc_size: u64,
+    pub fc_size: Option<u64>,
+    pub window_descriptor: Option<u8>,
+    pub dictionary_id: Option<u64>,
 }
 
 const FCS_SIZES: [u8; 4] = [0, 2, 4, 8];
 const DID_SIZES: [u8; 4] = [0, 1, 2, 4];
 
 impl FrameHeader {
+
+    fn read_bytes(input: &mut ForwardByteParser, size: usize) -> Option<u64> {
+        if size != 0 {
+            let did_field_bytes = input.slice(size as usize).unwrap();
+            let mut buf = [0u8; 8];
+            buf[..did_field_bytes.len()].copy_from_slice(did_field_bytes);
+            Some(u64::from_le_bytes(buf))
+        }  else {
+            None
+        }
+    }
+
     pub fn parse(input: &mut ForwardByteParser) -> FrameHeader {
         let descriptor = input.u8().expect("Could not read FrameHeader byte");
 
@@ -143,18 +154,35 @@ impl FrameHeader {
 
         let did_field_size = DID_SIZES.get((descriptor & 3) as usize).copied().unwrap_or_else(|| panic!("Unexpected Dictionary_ID_Flag value"));
 
-        let fc_size_bytes = input.slice(fcs_field_size as usize).unwrap();
 
-        let mut buf = [0u8; 8];
-        buf[..fc_size_bytes.len()].copy_from_slice(fc_size_bytes);
-        let fc_size = u64::from_le_bytes(buf);
+
+        //
+
+        let window_descriptor = if !is_single_segment {
+            let window_byte = input.u8().expect("failed to load window_descriptor byte");
+
+            let exponent = window_byte >> 3; // last 5 bytes
+            let mantissa = window_byte & 7; // first 3 bytes
+
+            let window_base = (1 << (10 + exponent));
+
+            Some(window_base + (window_base / 8) * mantissa)
+        } else {
+            None
+        };
+
+        let dictionary_id = Self::read_bytes(input, did_field_size as usize);
+        let fc_size = Self::read_bytes(input, fcs_field_size as usize);
 
         FrameHeader {
             is_single_segment,
             has_content_checksum,
             fcs_field_size,
             did_field_size,
-            fc_size
+
+            fc_size,
+            dictionary_id,
+            window_descriptor,
         }
     }
 }
